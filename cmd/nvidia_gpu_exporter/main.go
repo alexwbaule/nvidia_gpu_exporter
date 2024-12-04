@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	flg "flag"
 	"fmt"
+	"github.com/prometheus/common/promlog/flag"
 	"net"
 	"net/http"
 	"os"
@@ -15,11 +17,11 @@ import (
 	clientversion "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 	webflag "github.com/prometheus/exporter-toolkit/web/kingpinflag"
 
+	"github.com/kardianos/service"
 	"github.com/utkuozdemir/nvidia_gpu_exporter/internal/exporter"
 )
 
@@ -32,10 +34,62 @@ const redirectPageTemplate = `<html lang="en">
 </html>
 `
 
+type program struct{}
+
+func (p *program) Start(s service.Service) error {
+	// Start should not block. Do the actual work async.
+	go p.run()
+	return nil
+}
+func (p *program) run() {
+	// Do work here
+	StartApplication()
+}
+
+func (p *program) Stop(s service.Service) error {
+	return nil
+}
+
+func main() {
+	svcFlag := flg.String("service", "", "Control the system service.")
+	flg.Parse()
+
+	options := make(service.KeyValue)
+
+	options["StartType"] = "automatic"
+	options["OnFailure"] = "restart"
+	options["OnFailureDelayDuration"] = "10s"
+
+	svcConfig := &service.Config{
+		Name:        "Nvidia GPU Exporter",
+		DisplayName: "Nvidia GPU Exporter",
+		Description: "Nvidia GPU Exporter Collects metrics from Nvidia GPU resources",
+		Option:      options,
+	}
+
+	prg := &program{}
+	s, err := service.New(prg, svcConfig)
+	if err != nil {
+		os.Exit(-1)
+	}
+
+	if len(*svcFlag) != 0 {
+		err := service.Control(s, *svcFlag)
+		if err != nil {
+			os.Exit(-1)
+		}
+		return
+	}
+	err = s.Run()
+	if err != nil {
+		os.Exit(-1)
+	}
+}
+
 // main is the entrypoint of the application.
 //
 //nolint:funlen
-func main() {
+func StartApplication() {
 	var (
 		webConfig = webflag.AddFlags(kingpin.CommandLine, ":9835")
 		network   = kingpin.Flag("web.network",
@@ -54,7 +108,7 @@ func main() {
 			"Maximum amount of time to wait for the next request when keep-alive is enabled.").
 			Default("60s").Duration()
 		metricsPath = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").
-				Default("/metrics").String()
+			Default("/metrics").String()
 		nvidiaSmiCommand = kingpin.Flag("nvidia-smi-command",
 			"Path or command to be used for the nvidia-smi executable").
 			Default(exporter.DefaultNvidiaSmiCommand).String()
