@@ -1,0 +1,32 @@
+---
+name: release-fork
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euox pipefail {0}
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v7.2.2
+        with:
+          version: v2.16.0
+          args: release --clean --skip=scoop,dockers
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_ACCESS_TOKEN: placeholder
